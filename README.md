@@ -1,133 +1,80 @@
 ![Corda](https://www.corda.net/wp-content/uploads/2016/11/fg005_corda_b.png)
 
-# CorDapp Template
+# Access Control List Demo
 
-Welcome to the CorDapp template. The CorDapp template is a stubbed-out CorDapp 
-which you can use to bootstrap your own CorDapp projects.
+A basic CorDapp to demonstrate how you can integrate access control
+lists into your CorDapps.
 
-**This is the KOTLIN version of the CorDapp template. For the JAVA version click 
-[here](https://github.com/corda/cordapp-template-java/).**
+## Background
 
-## Pre-Requisites
+There are three Corda nodes in this demo; PartyA, PartyB and PartyC.
+There is also a web server which acts as the business network operator.
+In this scenario, the business network operator does not operate a Corda
+node. Instead, it serves an access control list via an API end-point.
 
-You will need the following installed on your machine before you can start:
+The business network operator can load in to memory a file containing an
+access control. This list will then be served via the API end-point. The
+list is simply a list of serialised CordaX500 names delineated by new
+lines. New names can be added via the console. Names can also be deleted
+via the console. Any changes to the list will be reflected in the list
+which the API end-point serves.
 
-* [JDK 8](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html) 
-  installed and available on your path (Minimum version: 1.8_131).
-* [IntelliJ IDEA](https://www.jetbrains.com/idea/download/) (Minimum version 2017.1)
-* git
-* Optional: [h2 web console](http://www.h2database.com/html/download.html)
-  (download the "platform-independent zip")
+In this scenario, via the flow framework, the three nodes have the
+capability to send each other "pings" and reply with "pongs". The three
+nodes in this scenario operate a CordaService which polls the business
+network operator's API end-point on a fixed interval. Each time the
+access control list is downloaded, the node's cache is updated with the
+new access control list. Before any of the nodes can start a flow to
+sender "ping", the access control list is checked to see if the
+recipient is on the list.
 
-For more detailed information, see the
-[getting set up](https://docs.corda.net/getting-set-up.html) page on the
-Corda docsite.
+## How it works
 
-For IDE, compilation and JVM version issues, see the
-[Troubleshooting](https://docs.corda.net/troubleshooting.html) page on the Corda docsite.
+The server module implements a simple API end-point which serves the
+"acl.txt" file. The file is read every time a request is sent to the
+`/acl` end-point. Additional lines can be added to the "acl.txt" file
+while the server is running. Care must be taken to ensure that the
+`CordaX500Name`s in the "acl.txt" file are well formed. If are not well
+formed then the web server will return a 500 Internal Error.
 
-## Getting Set Up
+The client works by polling the `/acl` end-point every second and then
+updating a whitelist held within a `CordaService`. Both the `PingFlow`
+and the `PongFlow` checks to see whether counter-parties are on the
+white-list.
 
-To get started, clone this repository with:
+## Using the demo
 
-     git clone https://github.com/corda/cordapp-template-kotlin.git
+Start the server and the clients. You must start the server before the
+client Corda nodes:
 
-And change directories to the newly cloned repo:
+    ./gradlew clean deployNodes
+    ./gradlew runServer
+    cd build/nodes
+    ./runnodes
 
-     cd cordapp-template-kotlin
+The access control list can be seen at http://localhost:8000/acl. Only
+PartyA is on the whitelist initially. When all the nodes have started
+then try to send a ping from PartyA to PartyB:
 
-## Building the CorDapp template:
+    start PingFlow target: PartyB
 
-**Unix:** 
+It should fail as PartyB is not on the white list:
 
-     ./gradlew deployNodes
+    🚫   Done
+    ☠   O=PartyB, L=New York, C=US is not on the whitelist.
 
-**Windows:**
+Now, add PartyB to the whitelist by opening "acl.txt" in the project
+root and adding `O=PartyB, L=New York, C=US` to the file on a new line.
+Then, send another ping to PartyB:
 
-     gradlew.bat deployNodes
+    start PingFlow target: PartyB
 
-Note: You'll need to re-run this build step after making any changes to
-the template for these to take effect on the node.
+The flow should successfully complete:
 
-## Running the Nodes
+    Sending PING to O=PartyB, L=New York, C=US
+    Received PONG from O=PartyB, L=New York, C=US
 
-Once the build finishes, change directories to the folder where the newly
-built nodes are located:
+    ✅   Done
 
-     cd build/nodes
+That's it!
 
-The Gradle build script will have created a folder for each node. You'll
-see three folders, one for each node and a `runnodes` script. You can
-run the nodes with:
-
-**Unix:**
-
-     ./runnodes --log-to-console --logging-level=DEBUG
-
-**Windows:**
-
-    runnodes.bat --log-to-console --logging-level=DEBUG
-
-You should now have three Corda nodes running on your machine serving 
-the template.
-
-When the nodes have booted up, you should see a message like the following 
-in the console: 
-
-     Node started up and registered in 5.007 sec
-
-## Interacting with the CorDapp via HTTP
-
-The CorDapp defines a couple of HTTP API end-points and also serves some
-static web content. Initially, these return generic template responses.
-
-The nodes can be found using the following port numbers, defined in 
-`build.gradle`, as well as the `node.conf` file for each node found
-under `build/nodes/partyX`:
-
-     PartyA: localhost:10007
-     PartyB: localhost:10010
-
-As the nodes start up, they should tell you which host and port their
-embedded web server is running on. The API endpoints served are:
-
-     /api/template/templateGetEndpoint
-
-And the static web content is served from:
-
-     /web/template
-
-## Using the Example RPC Client
-
-The `ExampleClient.kt` file is a simple utility which uses the client
-RPC library to connect to a node and log its transaction activity.
-It will log any existing states and listen for any future states. To build 
-the client use the following Gradle task:
-
-     ./gradlew runTemplateClient
-
-To run the client:
-
-**Via IntelliJ:**
-
-Select the 'Run Template RPC Client'
-run configuration which, by default, connect to PartyA (RPC port 10006). Click the
-Green Arrow to run the client.
-
-**Via the command line:**
-
-Run the following Gradle task:
-
-     ./gradlew runTemplateClient
-     
-Note that the template rPC client won't output anything to the console as no state 
-objects are contained in either PartyA's or PartyB's vault.
-
-## Running the Nodes Across Multiple Machines
-
-See https://docs.corda.net/tutorial-cordapp.html#running-nodes-across-machines.
-
-## Further reading
-
-Tutorials and developer docs for CorDapps and Corda are
-[here](https://docs.corda.net/).
