@@ -22,7 +22,7 @@ fun parseArgs(args: Array<String>) = when (args.size) {
 
 fun main(args: Array<String>) {
     val file = File(parseArgs(args))
-    println("This program serves an access contro list of CordaX500Names on localhost:8000.")
+    println("This program serves an access control list of CordaX500Names on localhost:8000.")
     println("WARNING: \"$file\" must contain correctly formatted CordaX500Names.")
     val acl = AccessControlList(file)
     val handler = AclHandler(acl)

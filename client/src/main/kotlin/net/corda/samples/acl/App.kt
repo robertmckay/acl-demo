@@ -40,14 +40,14 @@ class PongFlow(val otherSession: FlowSession) : FlowLogic<Unit>() {
     override val progressTracker: ProgressTracker = ProgressTracker()
     @Suspendable
     override fun call() {
-        val response = otherSession.receive<String>()
-        println("Received $response from ${otherSession.counterparty}")
-        val acl = serviceHub.cordaService(AclService::class.java).list
-
         // In case a "pinging" node is not on the whitelist.
+        val acl = serviceHub.cordaService(AclService::class.java).list
         if (otherSession.counterparty.name !in acl) {
             throw FlowException("${otherSession.counterparty} is not on the whitelist.")
         }
+
+        val response = otherSession.receive<String>()
+        println("Received $response from ${otherSession.counterparty}")
 
         println("Sending Pong to ${otherSession.counterparty}!")
         otherSession.send("PONG")
@@ -56,15 +56,22 @@ class PongFlow(val otherSession: FlowSession) : FlowLogic<Unit>() {
 
 @CordaService
 class AclService(val services: AppServiceHub) : SingletonSerializeAsToken() {
-    private var _list: Set<CordaX500Name> = getAcl()
+    @Volatile
+    var _list: Set<CordaX500Name> = getAcl()
+        private set
     val list get() = _list
 
     private val task = object : TimerTask() {
         override fun run() {
-            _list = getAcl()
+            // Only update if the set of CordaX500Names is not empty.
+            val list = getAcl()
+            if (list.isNotEmpty()) {
+                _list = list
+            }
         }
     }
 
+    // Poll the ACL every second. Unnecessary but makes the demo responsive.
     init {
         Timer().schedule(task, Date(), 1000)
     }
