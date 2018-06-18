@@ -107,6 +107,7 @@ class PongFlow(val otherSession: FlowSession) : FlowLogic<Unit>() {
 
 @InitiatingFlow
 @StartableByService
+@StartableByRPC
 class NewACLFlow(val initialParties : List<Party>) : FlowLogic<SignedTransaction>() {
 
 
