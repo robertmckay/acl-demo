@@ -78,19 +78,7 @@ class AclApi(val rpc : CordaRPCOps) : ApiListingResource() {
                 //filter out myself, notary and eventual network map started by driver
                 .filter { it.organisation !in (myLegalName.organisation) })
     }
-
-
-    @GET
-    @Path ("test")
-    @Produces(MediaType.TEXT_PLAIN)
-    fun test() = "This is a test"
-
-    @POST
-    @Path ("test")
-    @Produces(MediaType.TEXT_PLAIN)
-    fun testp(@QueryParam("name") target: String) : String {
-        return "Hello, ${target}"
-    }
+    
 
     @POST
     @Path ("ping")
@@ -127,33 +115,6 @@ class AclApi(val rpc : CordaRPCOps) : ApiListingResource() {
             // Create initial ACL
             return  rpc.startTrackedFlowDynamic(ACLCreateFlow::class.java, listOf(party)).toString()
         }
-
-    }
-
-    @POST
-    @Path("setMembers")
-    @Produces(MediaType.TEXT_PLAIN)
-    fun setMembers(@QueryParam("members") target :String) : String {
-
-        val parties = target.split(",").map { name -> rpc.partiesFromName(name, false).first() }
-
-        //val party = rpc.partiesFromName(target, false).first()
-
-        val retval = rpc.startTrackedFlowDynamic(ACLCreateFlow::class.java, parties)
-
-        return retval.toString()
-    }
-
-    @POST
-    @Path("updateMembers")
-    @Produces(MediaType.TEXT_PLAIN)
-    fun updateMembers(@QueryParam("members") update : String) : String {
-
-        val parties = update.split(",").map { name -> rpc.partiesFromName(name, false).first() }
-
-        val retval = rpc.startTrackedFlowDynamic(ACLUpdateFlow::class.java, parties)
-
-        return retval.toString()
 
     }
 
