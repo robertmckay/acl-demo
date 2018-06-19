@@ -1,16 +1,15 @@
 package net.corda.samples.acl
 
 import co.paralleluniverse.fibers.Suspendable
-import net.corda.core.contracts.Command
-import net.corda.core.contracts.StateAndContract
-import net.corda.core.contracts.StateAndRef
-import net.corda.core.contracts.StateRef
+import net.corda.core.contracts.*
+import net.corda.core.contracts.Requirements.using
 import net.corda.core.flows.*
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
 import net.corda.core.internal.openHttpConnection
 import net.corda.core.node.AppServiceHub
 import net.corda.core.node.ServiceHub
+import net.corda.core.node.StatesToRecord
 import net.corda.core.node.services.CordaService
 import net.corda.core.node.services.NetworkMapCache
 import net.corda.core.node.services.Vault
@@ -29,6 +28,7 @@ import net.corda.nodeapi.internal.addShutdownHook
 import net.corda.samples.acl.contracts.ACLContract
 import net.corda.samples.acl.contracts.ACL_CONTRACT_ID
 import net.corda.samples.acl.contracts.states.ACLState
+import net.corda.samples.acl.flows.ACLDistibutionFlow
 import org.dom4j.tree.AbstractNode
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -92,10 +92,11 @@ class PongFlow(val otherSession: FlowSession) : FlowLogic<Unit>() {
     @Suspendable
     override fun call() {
         // In case a "pinging" node is not on the whitelist.
-        //val acl = serviceHub.cordaService(AclService::class.java).list
-        //if (otherSession.counterparty.name !in acl) {
-        //    throw FlowException("${otherSession.counterparty} is not on the whitelist.")
-        //}
+        val acl = serviceHub.cordaService(AclService::class.java).getAcls()
+        println("${otherSession.counterparty.name} !in ${acl}")
+        if (otherSession.counterparty.name !in acl) {
+            throw FlowException("${otherSession.counterparty} is not on the whitelist.")
+        }
 
         val response = otherSession.receive<String>()
         println("Received $response from ${otherSession.counterparty}")
@@ -119,12 +120,16 @@ class NewACLFlow(val initialParties : List<Party>) : FlowLogic<SignedTransaction
         object FINALISING_TRANSACTION : ProgressTracker.Step("Obtaining notary signature and recording transaction.") {
             override fun childProgressTracker() = FinalityFlow.tracker()
         }
+        object BROADCASTING_TRANSACTION : ProgressTracker.Step("Sending transaction to non-participants (everyone)") {
+            override fun childProgressTracker() = ACLDistibutionFlow.tracker()
+        }
 
         fun tracker() = ProgressTracker(
                 GENERATING_TRANSACTION,
                 VERIFYING_TRANSACTION,
                 SIGNING_TRANSACTION,
-                FINALISING_TRANSACTION
+                FINALISING_TRANSACTION,
+                BROADCASTING_TRANSACTION
         )
     }
 
@@ -140,7 +145,7 @@ class NewACLFlow(val initialParties : List<Party>) : FlowLogic<SignedTransaction
         progressTracker.currentStep = GENERATING_TRANSACTION
         // Generate an unsigned transaction.
 
-        val aclState = ACLState(initialParties)
+        val aclState = ACLState(initialParties, me)
 
         val txCommand = Command(ACLContract.Commands.Create(), aclState.participants.map { it.owningKey })
         val txBuilder = TransactionBuilder(notary).withItems(StateAndContract(aclState, ACL_CONTRACT_ID), txCommand)
@@ -158,7 +163,73 @@ class NewACLFlow(val initialParties : List<Party>) : FlowLogic<SignedTransaction
         // Stage 5.
         progressTracker.currentStep = FINALISING_TRANSACTION
         // Notarise and record the transaction in both parties' vaults.
-        return  subFlow(FinalityFlow(fullySignedTx, FINALISING_TRANSACTION.childProgressTracker()))
+        val stx = subFlow(FinalityFlow(fullySignedTx, FINALISING_TRANSACTION.childProgressTracker()))
+
+        // Stage 6.
+        // Each transaction has its own set of recipients, but ACL transactions should
+        // be sent to everyone on the network, not just participants.
+
+        println("Attempting broadcast ACL distribution")
+        //val parties = serviceHub.networkMapCache.allNodes.flatMap { it.legalIdentities }
+        //progressTracker.currentStep = BROADCASTING_TRANSACTION
+        //for (party in parties) {
+        //    println("Sending ACL to ${party.name}")
+        //    if (!serviceHub.myInfo.isLegalIdentity(party)) {
+        //        val session = initiateFlow(party)
+        //        try {
+        //            subFlow(SendTransactionFlow(session, fullySignedTx))
+        //        } catch (uefe: UnexpectedFlowEndException) {
+        //            println(uefe.toString())
+        //        }
+        //    }
+        //}
+
+        subFlow(ACLDistibutionFlow(fullySignedTx, BROADCASTING_TRANSACTION.childProgressTracker()))
+
+        return stx
+
+    }
+
+}
+
+@InitiatedBy(NewACLFlow::class)
+class NewACLReceiver(val otherSession: FlowSession) : FlowLogic<Unit>() {
+
+    @Suspendable
+    override fun call() {
+
+        val stx = subFlow(ReceiveTransactionFlow(otherSession,true, StatesToRecord.ALL_VISIBLE))
+        println("Receiving NewACL tx: ${stx.tx.outputsOfType<ACLState>().first().members}")
+        stx.tx.toLedgerTransaction(serviceHub).verify()
+        println("verify didn't throw yet..")
+
+        //serviceHub.recordTransactions(StatesToRecord.ALL_VISIBLE, listOf(stx))
+
+        println("Recorded tx: ${stx.tx.id.toString()}")
+
+    }
+}
+
+@CordaService
+class AclService(val services: AppServiceHub) : SingletonSerializeAsToken() {
+
+
+    fun getAcls() = getAclState(services)
+
+    fun getAclState(services: AppServiceHub) : Set<CordaX500Name> {
+        val acls = services.vaultService.queryBy<ACLState>(QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED))
+        val acl = acls.states.singleOrNull() // if there is more than one unconsumed ACLState then this is bad
+
+        var cordaNames = setOf<CordaX500Name>()
+
+        if (acl!=null) {
+            acl.state.data.members.forEach() { party ->
+                cordaNames += party.name
+            }
+
+        }
+
+        return cordaNames
 
     }
 
@@ -207,8 +278,8 @@ class AclDistribution(val services: AppServiceHub) : SingletonSerializeAsToken()
     private fun sendACL(party: Party) {
         var acl = getCurrentAcl()
         //services.cordappProvider.getAppContext().cordapp.
-        var stx = services.startFlow(NewACLFlow(listOf()))
-        stx.returnValue.then { println(it) }
+        //var stx = services.startFlow(NewACLFlow(listOf()))
+        //stx.returnValue.then { println(it) }
 
         //services.startTrackedFlow(SendACL(party, acl))
     }
