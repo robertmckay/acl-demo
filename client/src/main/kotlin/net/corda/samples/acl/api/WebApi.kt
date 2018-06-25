@@ -4,24 +4,16 @@ import io.swagger.annotations.Api
 import io.swagger.annotations.ApiOperation
 import io.swagger.jaxrs.config.BeanConfig
 import io.swagger.jaxrs.listing.ApiListingResource
-import net.corda.core.contracts.UniqueIdentifier
-import net.corda.core.contracts.filterStatesOfType
-import net.corda.core.flows.FlowLogic
 import net.corda.core.identity.CordaX500Name
-import net.corda.core.identity.Party
 import net.corda.core.messaging.CordaRPCOps
-import net.corda.core.messaging.startFlow
-import net.corda.core.messaging.startTrackedFlow
 import net.corda.core.messaging.vaultQueryBy
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.utilities.loggerFor
-import net.corda.samples.acl.NewACLFlow
-import net.corda.samples.acl.PingFlow
 import net.corda.samples.acl.contracts.states.ACLState
 import net.corda.samples.acl.flows.ACLCreateFlow
 import net.corda.samples.acl.flows.ACLUpdateFlow
-import org.apache.activemq.artemis.core.protocol.core.impl.wireformat.Ping
+import net.corda.samples.acl.flows.PingFlow
 import org.slf4j.Logger
 import javax.ws.rs.*
 import javax.ws.rs.core.MediaType
@@ -78,7 +70,7 @@ class AclApi(val rpc : CordaRPCOps) : ApiListingResource() {
                 //filter out myself, notary and eventual network map started by driver
                 .filter { it.organisation !in (myLegalName.organisation) })
     }
-    
+
 
     @POST
     @Path ("ping")
