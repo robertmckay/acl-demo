@@ -76,5 +76,6 @@ The flow should successfully complete:
 
     ✅   Done
 
-That's it!
+That's it!  
+Cool stuff, right?
 
