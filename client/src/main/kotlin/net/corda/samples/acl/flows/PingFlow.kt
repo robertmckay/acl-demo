@@ -6,7 +6,7 @@ import net.corda.core.identity.Party
 import net.corda.core.node.ServiceHub
 import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.unwrap
-import net.corda.samples.acl.AclService
+import net.corda.samples.acl.services.AclService
 
 @InitiatingFlow
 @StartableByRPC

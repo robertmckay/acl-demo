@@ -2,38 +2,24 @@ package net.corda.samples.acl
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.*
-import net.corda.core.contracts.Requirements.using
 import net.corda.core.flows.*
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.identity.Party
-import net.corda.core.internal.openHttpConnection
 import net.corda.core.node.AppServiceHub
-import net.corda.core.node.ServiceHub
 import net.corda.core.node.StatesToRecord
 import net.corda.core.node.services.CordaService
-import net.corda.core.node.services.NetworkMapCache
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.queryBy
 import net.corda.core.node.services.vault.QueryCriteria
-import net.corda.core.serialization.CordaSerializable
-import net.corda.nodeapi.internal.persistence.CordaPersistence
 import net.corda.core.serialization.SingletonSerializeAsToken
-import net.corda.core.toFuture
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
-import net.corda.core.utilities.getOrThrow
-import net.corda.core.utilities.unwrap
 import net.corda.nodeapi.internal.addShutdownHook
 import net.corda.samples.acl.contracts.ACLContract
 import net.corda.samples.acl.contracts.ACL_CONTRACT_ID
 import net.corda.samples.acl.contracts.states.ACLState
 import net.corda.samples.acl.flows.ACLDistibutionFlow
-import org.dom4j.tree.AbstractNode
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
-import java.time.Duration
 import java.util.*
 
 
@@ -139,31 +125,6 @@ class NewACLReceiver(val otherSession: FlowSession) : FlowLogic<Unit>() {
         println("Recorded tx: ${stx.tx.id.toString()}")
 
     }
-}
-
-@CordaService
-class AclService(val services: AppServiceHub) : SingletonSerializeAsToken() {
-
-
-    fun getAcls() = getAclState(services)
-
-    fun getAclState(services: AppServiceHub) : Set<CordaX500Name> {
-        val acls = services.vaultService.queryBy<ACLState>(QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED))
-        val acl = acls.states.singleOrNull() // if there is more than one unconsumed ACLState then this is bad
-
-        var cordaNames = setOf<CordaX500Name>()
-
-        if (acl!=null) {
-            acl.state.data.members.forEach() { party ->
-                cordaNames += party.name
-            }
-
-        }
-
-        return cordaNames
-
-    }
-
 }
 
 @CordaService

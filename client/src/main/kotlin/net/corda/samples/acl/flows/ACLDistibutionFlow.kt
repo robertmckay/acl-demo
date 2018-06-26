@@ -2,13 +2,9 @@ package net.corda.samples.acl.flows
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.flows.*
-import net.corda.core.flows.FinalityFlow
-import net.corda.core.identity.Party
 import net.corda.core.node.StatesToRecord
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.ProgressTracker
-import net.corda.samples.acl.NewACLFlow
-import net.corda.samples.acl.NewACLFlow.Companion.tracker
 import net.corda.samples.acl.contracts.states.ACLState
 
 
@@ -61,7 +57,7 @@ class ACLDistributionReceiver(val otherSession: FlowSession) : FlowLogic<Unit>()
 
         //serviceHub.recordTransactions(StatesToRecord.ALL_VISIBLE, listOf(stx))
 
-        println("Recorded tx: ${stx.tx.id.toString()}")
+        println("Recorded tx: ${stx.tx.id}")
 
     }
 }
